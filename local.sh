@@ -17,11 +17,13 @@ log-parser () (
         tmux new-window -t tdc_log -n actions
         tmux new-window -t tdc_log -n errors
         tmux new-window -t tdc_log -n user-deleted
+        tmux new-window -t tdc_log -n tg_bot
         tmux kill-window -t tdc_log:0
         sleep 0.5
         tmux send-keys -t tdc_log:actions "tdc-log-parser api-platform watch actions" 'C-m'
         tmux send-keys -t tdc_log:errors "tdc-log-parser api-platform watch errors" 'C-m'
         tmux send-keys -t tdc_log:user-deleted "tdc-log-parser api-platform watch user-deleted" 'C-m'
+        tmux send-keys -t tdc_log:tg_bot "/home/tsybin/Projects/workspace/shell.sh tdc_stats_tg_bot" 'C-m'
         tmux select-window -t tdc_log:actions
 
 
@@ -205,19 +207,17 @@ log-parser () (
             ${log_server} cat "${log_path}/api-platform.log" | sed 's/\\\"/"/g' >"${actions_pipe}"
             in_tmux
             ;;
-        tmux2)
-            in_tmux_2
+        attach-tmux)
+            tmux attach-session -t tdc_log
             ;;
         swtmux)
             tmux select-window -t tdc_log:"${2}"
             ;;
         kill-tmux)
+            tdc_stats_tg_bot_pid=$(ps aux | grep bot | grep -v grep | awk '{printf "%s ", $2}')
+            [ -z "${tdc_stats_tg_bot_pid}" ] && kill -SIGINT "${tdc_stats_tg_bot_pid}"
             tmux kill-session -t tdc_log
             rm -f "${actions_pipe}"
-            ;;
-        kill-tmux2)
-            tmux kill-session -t tdc_log_summary
-            rm -f  /tmp/tdc-api-actions.pipe
             ;;
     esac
 
@@ -274,6 +274,22 @@ log-parser () (
                     # printf "\033[32m*\033[0m summary from the day start \x0a"; \
                     sleep 1
             done
+            ;;
+        stats)
+            cat "${actions_pipe}" |
+            sed 's/\\\"/"/g' |
+            ${grep_cmd} -iE '(preReadHandler|error|critical)' |
+            tee \
+                >(grep -E "camera_added" | printf "%s %d %b" "camera_added" "$(wc -l)" "\x0a")\
+                >(grep -E "camera_removed" | printf "%s %d %b" "camera_removed" "$(wc -l)" "\x0a")\
+                >(grep -E "plan_purchased" | printf "%s %d %b" "plan_purchased" "$(wc -l)" "\x0a")\
+                >(grep -E "plan_cancelled" | printf "%s %d %b" "plan_cancelled" "$(wc -l)" "\x0a")\
+                >(grep -E "trial_used" | printf "%s %d %b" "trial_used" "$(wc -l)" "\x0a")\
+                >(grep -E "user_deleted" | printf "%s %d %b" "user_deleted" "$(wc -l)" "\x0a")\
+                >(grep -E "services_updated" | printf "%s %d %b" "services_updated" "$(wc -l)" "\x0a")\
+                >(grep -E "(error|critical)" | printf "%s %d %b" "errors" "$(wc -l)" "\x0a")\
+                >(printf "%s %d %b" "total income" "$(wc -l)" "\x0a") \
+                > /dev/null | cat -
             ;;
         *)
             ${parser_cmd}

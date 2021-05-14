@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+import signal
+import sys
+import json
+import re
+import pprint
+import datetime
+
+
+REMOTE_SERVER = "eu02-web-logs"
+REMOTE_PATH = "/logs-tdc/latest/api-platform.log"
+ACTIONS_PIPE = "/tmp/tdc-log-daemon.pype"
+ACTIONS_PID = "/tmp/tdc-log-daemon.pid"
+
+stats = {
+    'total': 0,
+    'errors': 0,
+    'services_updated': 0,
+    'user_deleted': 0,
+    'trial_used': 0,
+    'plan_cancelled': 0,
+    'plan_purchased': 0,
+    'camera_removed': 0,
+    'camera_added': 0,
+}
+
+
+if sys.argv[1] == 'start':
+    print('Starting...', end='')
+    log_pipe_w = open(ACTIONS_PIPE, 'w+')
+    log_reader_proc = subprocess.Popen(['ssh', REMOTE_SERVER, 'tail', '-f', '-n', '+1', REMOTE_PATH],
+                                       stdout=log_pipe_w, env=os.environ, bufsize=0)
+    open(ACTIONS_PID, 'w').write(str(log_reader_proc.pid))
+    print(str(log_reader_proc.pid))
+
+elif sys.argv[1] == 'stop':
+    print('Stopping...', end='')
+    pid = open(ACTIONS_PID, 'r').read()
+    os.kill(int(pid), signal.SIGQUIT)
+    print(pid)
+
+elif sys.argv[1] == 'watch':
+    print('Watching...')
+    log_printer_proc = subprocess.Popen(
+        ['tail', '-f', '-n', '+1', ACTIONS_PIPE], stdout=subprocess.PIPE, env=os.environ)
+    while log_printer_proc.poll() is None:
+        print(log_printer_proc.stdout.read(1).decode('utf-8'), end='')
+
+elif sys.argv[1] == 'stat':
+    print('Stats...')
+    pipe = open(ACTIONS_PIPE, 'r')
+    while line := pipe.readline():
+        line = line.replace('\\"', '"').replace('"{', '{').replace('}"}', '}}')
+        event_type = re.search(r'tdc-service.([^:]+):', line).group(1)
+        message = re.search(r'(\{.*\})', line).group(1)
+        if re.match(r'(critical|error)', event_type, re.IGNORECASE) is not None:
+            stats['errors'] += 1
+            continue
+        if len(message) > 0:
+            event = json.loads(message).get('event')
+            if event is not None:
+                stats['total'] += 1
+                stats[event.get('action')] += 1
+
+    pprint.pp(stats)

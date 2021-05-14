@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+
+""" Telegram client """
+
+import pprint
+
+from telegram.client import Telegram
+
+
+class Tgcl:
+    """ Api connector """
+
+    def __init__(self):
+        self.api = Telegram(
+            # test application
+            # api_id='4438176',  # api-id
+            # api_hash='1f0dddde7b4e988dff2ce25c5d658ee9',  # api-hash
+            # phone='+79996797027',  # you can pass 'bot_token' instead
+
+            # half-ready bot
+            api_id='4063146',  # api-id
+            api_hash='e751e77885e2ce0d75f678db48d5bc8a',  # api-hash
+            bot_token='1872231902:AAHAuHkCiYUGuKjeJoBWAHDUnyoCPF0jW8Y',  # you can pass 'phone' instead
+
+            # second phone
+            # api_id='4063146',  # api-id
+            # api_hash='e751e77885e2ce0d75f678db48d5bc8a',  # api-hash
+            # phone='+79267660726',  # you can pass 'bot_token' instead
+
+            database_encryption_key='',
+        )
+        self.api.login()
+
+    def msgHandler(self, update):
+        """Messages handler"""
+        pprint.pp(update)
+        pprint.pp(update.get('message').get('sender').get('user_id'))
+        response = self.api.get_chat(update.get('message').get('chat_id'))
+        response.wait()
+        pprint.pp(response.update)
+        # response = self.api.get_user(update.get('message').get('sender').get('user_id'))
+        # response.wait()
+        # pprint.pp(response.update)
+        # response = self.api.call_method('getUserFullInfo', params={'user_id': update.get('message').get('sender').get('user_id')})
+        # response.wait()
+        # pprint.pp(response.update)
+        # if result.update.get('title') is not None:
+        #     if ('qbmn_tst_chan').get(result.update.get('title')) is None:
+        #         return
+        msg = update['message']['content'].get(
+            'text', {}).get('text', '').lower()
+
+        if msg == "ping":
+            print('ping recieved')
+            chat_id = update['message']['chat_id']
+            self.api.send_message(
+                chat_id=chat_id,
+                text='pong',
+            )
+        elif msg == "sender":
+            print(update.get('message').get('sender'))
+        elif msg == "print":
+            pprint.pp(update)
+        elif msg == "joke":
+            chat_id = update['message']['chat_id']
+            result = self.api.get_chat(chat_id)
+            result.wait()
+            pprint.pp(result.update.get('title'))
+        elif msg == "exit":
+            print('exit cmd recieved')
+            chat_id = update['message']['chat_id']
+            self.api.send_message(
+                chat_id=chat_id,
+                text='affirmative',
+            )
+            self.stop()
+
+    def stop(self):
+        self.api.stop()
+
+    def bot_test(self):
+        res = self.api.get_me()
+        res.wait()
+
+    def test(self):
+        """ Test run """
+        # if this is the first run, library needs to preload all chats
+        # otherwise the message will not be sent
+        result = self.api.get_chats()
+        result.wait()
+        print(result)
+        self.api.add_message_handler(self.msgHandler)
+        # self.api.add_update_handler('updateNewMessage', self.msgUpdateHandler)
+        self.api.idle()
+        print('test finished')
+
+
+cl = Tgcl()
+cl.test()
